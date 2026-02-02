@@ -53,7 +53,18 @@ jobs:
         run: uv sync --dev
       
       - name: Build Windows exe
-        run: uv run pyinstaller --onefile --windowed --name AlembicViewer --icon=alembic_viewer.ico alembic_viewer.py
+        run: |
+          uv run pyinstaller --onefile --windowed --name AlembicViewer --icon=alembic_viewer.ico `
+            --hidden-import=alembic_viewer `
+            --hidden-import=alembic_viewer.app `
+            --hidden-import=alembic_viewer.canvas `
+            --hidden-import=alembic_viewer.config `
+            --hidden-import=alembic_viewer.dialogs `
+            --hidden-import=alembic_viewer.models `
+            --hidden-import=alembic_viewer.parser `
+            --collect-submodules=alembic_viewer `
+            --collect-data=babel `
+            alembic_viewer.py
       
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4

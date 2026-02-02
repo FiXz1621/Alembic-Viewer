@@ -24,7 +24,15 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=babel_datas,
-    hiddenimports=[],
+    hiddenimports=[
+        'alembic_viewer',
+        'alembic_viewer.app',
+        'alembic_viewer.canvas',
+        'alembic_viewer.config',
+        'alembic_viewer.dialogs',
+        'alembic_viewer.models',
+        'alembic_viewer.parser',
+    ],
     hookspath=['hooks'],  # Usar nuestro hook personalizado
     hooksconfig={},
     runtime_hooks=[],
