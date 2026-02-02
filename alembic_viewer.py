@@ -1430,36 +1430,19 @@ class AlembicViewerApp:
         """Muestra el diálogo de configuración de colores."""
         dialog = tk.Toplevel(self.root)
         dialog.title("Configuración de Colores")
-        dialog.geometry("500x550")
-        dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        # Centrar en la ventana principal
-        dialog.geometry(f"+{self.root.winfo_x() + 150}+{self.root.winfo_y() + 50}")
-        
-        # Frame con scroll
-        main_frame = ttk.Frame(dialog, padding=10)
+        # Frame principal con padding
+        main_frame = ttk.Frame(dialog, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         ttk.Label(main_frame, text="Personalizar colores del grafo", 
-                  font=("TkDefaultFont", 12, "bold")).pack(anchor=tk.W, pady=(0, 10))
+                  font=("TkDefaultFont", 14, "bold")).pack(anchor=tk.W, pady=(0, 15))
         
-        # Canvas con scroll para los colores
-        canvas = tk.Canvas(main_frame, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Frame contenedor para la lista de colores (sin scroll, todos visibles)
+        colors_frame = ttk.Frame(main_frame)
+        colors_frame.pack(fill=tk.BOTH, expand=True)
         
         # Obtener colores actuales
         current_colors = get_colors(self.config)
@@ -1474,26 +1457,25 @@ class AlembicViewerApp:
                 color_vars[key].set(result[1])
                 color_previews[key].configure(bg=result[1])
         
-        # Crear filas para cada color
+        # Crear filas para cada color usando grid para mejor alineación
         for i, (key, label) in enumerate(COLOR_LABELS.items()):
-            row_frame = ttk.Frame(scrollable_frame)
-            row_frame.pack(fill=tk.X, pady=3)
-            
             # Label del color
-            ttk.Label(row_frame, text=label, width=25, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
+            ttk.Label(colors_frame, text=label, anchor=tk.W).grid(
+                row=i, column=0, sticky=tk.W, padx=(0, 15), pady=4
+            )
             
             # Variable para almacenar el color
             color_vars[key] = tk.StringVar(value=current_colors.get(key, DEFAULT_COLORS[key]))
             
             # Preview del color
-            preview = tk.Canvas(row_frame, width=30, height=20, highlightthickness=1, 
+            preview = tk.Canvas(colors_frame, width=35, height=22, highlightthickness=1, 
                                highlightbackground="#999", bg=color_vars[key].get())
-            preview.pack(side=tk.LEFT, padx=(0, 5))
+            preview.grid(row=i, column=1, padx=(0, 8), pady=4)
             color_previews[key] = preview
             
             # Entrada de texto para el código hex
-            entry = ttk.Entry(row_frame, textvariable=color_vars[key], width=10)
-            entry.pack(side=tk.LEFT, padx=(0, 5))
+            entry = ttk.Entry(colors_frame, textvariable=color_vars[key], width=10)
+            entry.grid(row=i, column=2, padx=(0, 8), pady=4)
             
             # Actualizar preview cuando cambia el texto
             def update_preview(var_key=key):
@@ -1505,8 +1487,8 @@ class AlembicViewerApp:
             color_vars[key].trace_add("write", lambda *args, k=key: update_preview(k))
             
             # Botón para abrir el selector
-            ttk.Button(row_frame, text="...", width=3, 
-                      command=lambda k=key: pick_color(k)).pack(side=tk.LEFT)
+            ttk.Button(colors_frame, text="Elegir...", width=8, 
+                      command=lambda k=key: pick_color(k)).grid(row=i, column=3, pady=4)
         
         # Frame de botones
         btn_frame = ttk.Frame(main_frame)
@@ -1534,13 +1516,29 @@ class AlembicViewerApp:
             dialog.destroy()
             messagebox.showinfo("Éxito", "Colores guardados correctamente.")
         
-        ttk.Button(btn_frame, text="Restablecer", command=reset_colors).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Aplicar", command=apply_colors).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Guardar", command=save_and_close).pack(side=tk.LEFT, padx=5)
+        # Separador
+        ttk.Separator(btn_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(0, 10))
+        
+        # Botones centrados
+        buttons_container = ttk.Frame(btn_frame)
+        buttons_container.pack()
+        
+        ttk.Button(buttons_container, text="Restablecer", command=reset_colors).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_container, text="Aplicar", command=apply_colors).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_container, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_container, text="Guardar", command=save_and_close).pack(side=tk.LEFT, padx=5)
         
         # Bind Escape para cerrar
         dialog.bind("<Escape>", lambda e: dialog.destroy())
+        
+        # Ajustar tamaño del diálogo al contenido y centrar
+        dialog.update_idletasks()
+        dialog.minsize(dialog.winfo_width(), dialog.winfo_height())
+        
+        # Centrar en la ventana principal
+        x = self.root.winfo_x() + (self.root.winfo_width() - dialog.winfo_width()) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dialog.winfo_height()) // 2
+        dialog.geometry(f"+{x}+{y}")
     
     def _update_legend_colors(self, colors: dict):
         """Actualiza los colores de la leyenda."""
