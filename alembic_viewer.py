@@ -17,11 +17,10 @@ import subprocess
 import platform
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from collections import defaultdict
-import math
-from datetime import date
+from typing import Callable, Optional
 
 # Intentar importar tkcalendar para selector de fechas
 try:
@@ -215,9 +214,9 @@ class GraphCanvas(tk.Canvas):
         self.node_items: dict[str, int] = {}  # revision -> canvas item id
         self.item_to_rev: dict[int, str] = {}  # canvas item id -> revision (mapeo inverso)
         self.selected_node: str | None = None
-        self.on_node_select = None
-        self.on_node_double_click = None  # Callback para doble-click
-        self.on_node_deselect = None  # Callback para deselección
+        self.on_node_select: Optional[Callable[[str], None]] = None
+        self.on_node_double_click: Optional[Callable[[str], None]] = None  # Callback para doble-click
+        self.on_node_deselect: Optional[Callable[[], None]] = None  # Callback para deselección
         
         # Para pan y zoom
         self.scale_factor = 1.0
@@ -418,7 +417,7 @@ class GraphCanvas(tk.Canvas):
                         smooth=True,
                         arrow=tk.FIRST,
                         arrowshape=(8, 10, 4)
-                    )
+                    ) # pyright: ignore[reportCallIssue]
                 else:
                     # Línea recta
                     self.create_line(
@@ -1434,7 +1433,7 @@ class AlembicViewerApp:
             if system == "Darwin":  # macOS
                 subprocess.run(["open", filepath_str], check=True)
             elif system == "Windows":
-                os.startfile(filepath_str)
+                os.startfile(filepath_str) # pyright: ignore[reportAttributeAccessIssue]
             else:  # Linux y otros
                 subprocess.run(["xdg-open", filepath_str], check=True)
         except Exception as e:
