@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "Fernando", email = "fernando@example.com" }
+    { name = "Fernando"}
 ]
 keywords = ["alembic", "migrations", "visualization", "gui", "tkinter"]
 classifiers = [
