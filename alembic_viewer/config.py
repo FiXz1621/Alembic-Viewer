@@ -65,3 +65,29 @@ def get_colors(config: dict) -> dict:
     colors = DEFAULT_COLORS.copy()
     colors.update(saved_colors)
     return colors
+
+
+def get_alembic_paths(config: dict) -> list[str]:
+    """Obtiene la lista de rutas de alembic configuradas.
+    
+    Soporta tanto el formato antiguo (alembic_path: str) como el nuevo (alembic_paths: list).
+    """
+    # Formato nuevo: lista de paths
+    if "alembic_paths" in config:
+        return config["alembic_paths"]
+    
+    # Formato antiguo: un solo path (migrar automáticamente)
+    if "alembic_path" in config:
+        return [config["alembic_path"]]
+    
+    return []
+
+
+def set_alembic_paths(config: dict, paths: list[str]):
+    """Establece la lista de rutas de alembic.
+    
+    También elimina el formato antiguo si existe.
+    """
+    config["alembic_paths"] = paths
+    # Eliminar formato antiguo si existe
+    config.pop("alembic_path", None)

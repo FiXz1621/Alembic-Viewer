@@ -5,7 +5,14 @@ from collections.abc import Callable
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from alembic_viewer.config import COLOR_LABELS, DEFAULT_COLORS, get_colors, save_config
+from alembic_viewer.config import (
+    COLOR_LABELS,
+    DEFAULT_COLORS,
+    get_alembic_paths,
+    get_colors,
+    save_config,
+    set_alembic_paths,
+)
 
 # Intentar importar tkcalendar para selector de fechas
 try:
@@ -49,89 +56,172 @@ def show_calendar_popup(parent: tk.Tk, target_var: tk.StringVar):
     popup.wait_window()
 
 
-def show_config_dialog(parent: tk.Tk, alembic_path: Path, config: dict, on_save: Callable):
-    """Muestra el diálogo de configuración de rutas."""
+def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
+    """Muestra el diálogo de configuración de carpetas de Alembic."""
     dialog = tk.Toplevel(parent)
-    dialog.title("Configuración")
-    dialog.geometry("600x200")
-    dialog.resizable(False, False)
+    dialog.title("Configuracion de Carpetas")
+    dialog.geometry("650x400")
+    dialog.resizable(True, True)
     dialog.transient(parent)
     dialog.grab_set()
 
-    dialog.geometry(f"+{parent.winfo_x() + 100}+{parent.winfo_y() + 100}")
+    # Centrar en la ventana principal
+    x = parent.winfo_x() + (parent.winfo_width() - 650) // 2
+    y = parent.winfo_y() + (parent.winfo_height() - 400) // 2
+    dialog.geometry(f"+{x}+{y}")
 
-    frame = ttk.Frame(dialog, padding=20)
+    frame = ttk.Frame(dialog, padding=15)
     frame.pack(fill=tk.BOTH, expand=True)
 
-    ttk.Label(frame, text="Carpeta de Alembic:", font=("TkDefaultFont", 10, "bold")).grid(
-        row=0, column=0, sticky=tk.W, pady=(0, 5)
+    # Título
+    ttk.Label(
+        frame, text="Carpetas de Versiones", font=("TkDefaultFont", 12, "bold")
+    ).pack(anchor=tk.W, pady=(0, 5))
+
+    ttk.Label(
+        frame,
+        text="Agrega las carpetas que contienen los archivos de migraciones (.py).",
+        foreground="gray",
+    ).pack(anchor=tk.W, pady=(0, 10))
+
+    # Frame para la lista
+    list_frame = ttk.Frame(frame)
+    list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+    # Listbox con scrollbar
+    listbox_frame = ttk.Frame(list_frame)
+    listbox_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    scrollbar = ttk.Scrollbar(listbox_frame)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    paths_listbox = tk.Listbox(
+        listbox_frame,
+        height=10,
+        selectmode=tk.SINGLE,
+        yscrollcommand=scrollbar.set,
+        font=("TkDefaultFont", 10),
     )
+    paths_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    scrollbar.config(command=paths_listbox.yview)
 
-    path_var = tk.StringVar(value=str(alembic_path))
-    path_entry = ttk.Entry(frame, textvariable=path_var, width=60)
-    path_entry.grid(row=1, column=0, sticky=tk.EW, padx=(0, 5))
+    # Cargar paths existentes
+    current_paths = get_alembic_paths(config).copy()
+    for path in current_paths:
+        paths_listbox.insert(tk.END, path)
 
-    def browse_folder():
+    # Botones de acción para la lista
+    action_frame = ttk.Frame(list_frame)
+    action_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+
+    def add_folder():
         folder = filedialog.askdirectory(
             title="Seleccionar carpeta de Alembic",
-            initialdir=alembic_path if alembic_path.exists() else Path.home(),
+            initialdir=Path.home(),
         )
         if folder:
-            path_var.set(folder)
-
-    ttk.Button(frame, text="Explorar...", command=browse_folder).grid(row=1, column=1, padx=(5, 0))
-
-    info_label = ttk.Label(
-        frame,
-        text="La carpeta debe contener subcarpetas como 'delfos_versions' y 'tenant_versions'.",
-        foreground="gray",
-    )
-    info_label.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
-
-    current_label = ttk.Label(frame, text=f"Ruta actual: {alembic_path}", foreground="blue")
-    current_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
-
-    btn_frame = ttk.Frame(frame)
-    btn_frame.grid(row=4, column=0, columnspan=2, pady=(20, 0))
-
-    def save_and_reload():
-        new_path = Path(path_var.get())
-        if not new_path.exists():
-            messagebox.showerror("Error", f"La carpeta no existe:\n{new_path}")
-            return
-
-        has_versions = any(
-            [
-                (new_path / "delfos_versions").exists(),
-                (new_path / "tenant_versions").exists(),
-                (new_path / "versions").exists(),
-            ]
-        )
-
-        if not has_versions:
-            if not messagebox.askyesno(
-                "Advertencia",
-                "No se encontraron carpetas de versiones (delfos_versions, tenant_versions).\n"
-                "¿Continuar de todos modos?",
-            ):
+            # Verificar que no esté duplicada
+            if folder in current_paths:
+                messagebox.showwarning("Aviso", "Esta carpeta ya esta en la lista.")
                 return
 
-        config["alembic_path"] = str(new_path)
+            # Verificar que tenga archivos de migraciones
+            folder_path = Path(folder)
+            if folder_path.exists():
+                has_migrations = any(
+                    item.is_file() and item.suffix == ".py" and item.name != "__init__.py"
+                    for item in folder_path.iterdir()
+                )
+                if not has_migrations:
+                    if not messagebox.askyesno(
+                        "Advertencia",
+                        f"No se encontraron archivos de migracion (.py) en:\n{folder}\n\n"
+                        "Continuar de todos modos?",
+                    ):
+                        return
+
+            current_paths.append(folder)
+            paths_listbox.insert(tk.END, folder)
+
+    def remove_selected():
+        selection = paths_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("Info", "Selecciona una carpeta para eliminar.")
+            return
+
+        idx = selection[0]
+        path = paths_listbox.get(idx)
+
+        if messagebox.askyesno("Confirmar", f"Eliminar esta carpeta de la lista?\n\n{path}"):
+            paths_listbox.delete(idx)
+            current_paths.remove(path)
+
+    def move_up():
+        selection = paths_listbox.curselection()
+        if not selection or selection[0] == 0:
+            return
+        idx = selection[0]
+        path = current_paths.pop(idx)
+        current_paths.insert(idx - 1, path)
+        paths_listbox.delete(0, tk.END)
+        for p in current_paths:
+            paths_listbox.insert(tk.END, p)
+        paths_listbox.selection_set(idx - 1)
+
+    def move_down():
+        selection = paths_listbox.curselection()
+        if not selection or selection[0] >= len(current_paths) - 1:
+            return
+        idx = selection[0]
+        path = current_paths.pop(idx)
+        current_paths.insert(idx + 1, path)
+        paths_listbox.delete(0, tk.END)
+        for p in current_paths:
+            paths_listbox.insert(tk.END, p)
+        paths_listbox.selection_set(idx + 1)
+
+    ttk.Button(action_frame, text="Agregar...", command=add_folder, width=12).pack(pady=2)
+    ttk.Button(action_frame, text="Eliminar", command=remove_selected, width=12).pack(pady=2)
+    ttk.Separator(action_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+    ttk.Button(action_frame, text="Subir", command=move_up, width=12).pack(pady=2)
+    ttk.Button(action_frame, text="Bajar", command=move_down, width=12).pack(pady=2)
+
+    # Separador
+    ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+
+    # Botones de diálogo
+    btn_frame = ttk.Frame(frame)
+    btn_frame.pack(fill=tk.X)
+
+    def save_and_close():
+        if not current_paths:
+            messagebox.showwarning("Aviso", "Debes agregar al menos una carpeta.")
+            return
+
+        set_alembic_paths(config, current_paths)
         save_config(config)
-
         dialog.destroy()
-        on_save(new_path)
-        messagebox.showinfo("Éxito", f"Configuración guardada.\nUsando: {new_path}")
+        on_save(current_paths)
+        messagebox.showinfo("Exito", f"Configuracion guardada.\n{len(current_paths)} carpeta(s) configurada(s).")
 
-    def reset_to_default():
-        default_path = Path(__file__).parent.parent / "alembic"
-        path_var.set(str(default_path))
+    ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
+    ttk.Button(btn_frame, text="Guardar y Recargar", command=save_and_close).pack(side=tk.RIGHT, padx=5)
 
-    ttk.Button(btn_frame, text="Restablecer", command=reset_to_default).pack(side=tk.LEFT, padx=5)
-    ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
-    ttk.Button(btn_frame, text="Guardar y Recargar", command=save_and_reload).pack(side=tk.LEFT, padx=5)
+    # Info de carpetas
+    info_label = ttk.Label(
+        btn_frame,
+        text=f"{len(current_paths)} carpeta(s) configurada(s)",
+        foreground="blue",
+    )
+    info_label.pack(side=tk.LEFT)
 
-    frame.columnconfigure(0, weight=1)
+    def update_info(*args):
+        info_label.config(text=f"{len(current_paths)} carpeta(s) configurada(s)")
+
+    # Actualizar contador cuando cambie la lista
+    paths_listbox.bind("<<ListboxSelect>>", update_info)
+
+    dialog.bind("<Escape>", lambda e: dialog.destroy())
 
 
 def show_color_config_dialog(parent: tk.Tk, config: dict, on_apply: Callable, on_save: Callable):

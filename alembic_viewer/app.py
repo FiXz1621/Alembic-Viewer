@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from alembic_viewer.canvas import GraphCanvas
-from alembic_viewer.config import get_colors, load_config
+from alembic_viewer.config import get_alembic_paths, get_colors, load_config
 from alembic_viewer.dialogs import HAS_TKCALENDAR, show_calendar_popup, show_color_config_dialog, show_config_dialog
 from alembic_viewer.models import Migration
 from alembic_viewer.parser import build_graph_structure, find_heads, find_roots, load_migrations
@@ -24,16 +24,20 @@ class AlembicViewerApp:
 
         self.config = load_config()
 
+        # Lista de rutas configuradas (para compatibilidad, aún soportamos un solo path pasado como argumento)
         if alembic_path:
-            self.alembic_path = alembic_path
-        elif "alembic_path" in self.config:
-            self.alembic_path = Path(self.config["alembic_path"])
+            self.alembic_paths = [alembic_path]
         else:
-            self.alembic_path = Path(__file__).parent.parent / "alembic"
+            configured_paths = get_alembic_paths(self.config)
+            if configured_paths:
+                self.alembic_paths = [Path(p) for p in configured_paths]
+            else:
+                self.alembic_paths = [Path(__file__).parent.parent / "alembic"]
 
         self.migrations: dict[str, dict[str, Migration]] = {}
         self.children: dict[str, dict[str, list[str]]] = {}
         self.parents: dict[str, dict[str, list[str]]] = {}
+        self.version_to_path: dict[str, Path] = {}  # Mapeo de versión a su ruta base
 
         self.selected_revision: str | None = None
         self.search_results: list[str] = []
@@ -74,7 +78,7 @@ class AlembicViewerApp:
         config_menu = tk.Menu(config_menubutton, tearoff=0)
         config_menubutton["menu"] = config_menu
 
-        config_menu.add_command(label="Ruta de Alembic...", command=self._show_config_dialog)
+        config_menu.add_command(label="Carpetas de Alembic...", command=self._show_config_dialog)
         config_menu.add_command(label="Colores del grafo...", command=self._show_color_config_dialog)
 
         ttk.Separator(control_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=10, fill=tk.Y)
@@ -262,27 +266,33 @@ class AlembicViewerApp:
         self.root.bind("<Escape>", self._on_deselect)
 
     def _load_all_migrations(self):
-        """Carga todas las migraciones de todas las carpetas de versiones."""
+        """Carga todas las migraciones de todas las carpetas configuradas."""
         self.migrations.clear()
         self.children.clear()
         self.parents.clear()
+        self.version_to_path.clear()
 
-        version_dirs = []
-        if self.alembic_path.exists():
-            for item in self.alembic_path.iterdir():
-                if item.is_dir() and "versions" in item.name:
-                    version_dirs.append(item)
+        for version_path in self.alembic_paths:
+            if not version_path.exists():
+                continue
 
-        if not version_dirs:
-            messagebox.showwarning("Aviso", f"No se encontraron carpetas de versiones en {self.alembic_path}")
-            return
+            # Cada ruta configurada ES una carpeta de versiones directamente
+            name = version_path.name
 
-        for version_dir in version_dirs:
-            name = version_dir.name
-            self.migrations[name] = load_migrations(version_dir)
+            # Si hay conflicto de nombre, añadir el directorio padre
+            if name in self.migrations:
+                name = f"{version_path.parent.name}/{name}"
+
+            self.migrations[name] = load_migrations(version_path)
             children, parents = build_graph_structure(self.migrations[name])
             self.children[name] = children
             self.parents[name] = parents
+            self.version_to_path[name] = version_path
+
+        if not self.migrations:
+            paths_str = "\n".join(str(p) for p in self.alembic_paths)
+            messagebox.showwarning("Aviso", f"No se encontraron migraciones en:\n{paths_str}")
+            return
 
         self.version_combo["values"] = list(self.migrations.keys())
         if self.migrations:
@@ -431,12 +441,12 @@ Fecha de creacion:
         """Carga el código fuente de la migración en el panel de vista previa."""
         version = self.version_var.get()
 
-        if "delfos" in version.lower():
-            versions_folder = "delfos_versions"
-        else:
-            versions_folder = "tenant_versions"
+        # Obtener la ruta real de la carpeta de versiones
+        version_path = self.version_to_path.get(version)
+        if not version_path:
+            return
 
-        filepath = self.alembic_path / versions_folder / migration.filename
+        filepath = version_path / migration.filename
 
         self.code_text.config(state=tk.NORMAL)
         self.code_text.delete("1.0", tk.END)
@@ -520,11 +530,11 @@ Fecha de creacion:
     def _show_config_dialog(self):
         """Muestra el diálogo de configuración de rutas."""
 
-        def on_save(new_path: Path):
-            self.alembic_path = new_path
+        def on_save(paths: list[str]):
+            self.alembic_paths = [Path(p) for p in paths]
             self._load_all_migrations()
 
-        show_config_dialog(self.root, self.alembic_path, self.config, on_save)
+        show_config_dialog(self.root, self.config, on_save)
 
     def _show_color_config_dialog(self):
         """Muestra el diálogo de configuración de colores."""
@@ -569,12 +579,12 @@ Fecha de creacion:
 
         migration = migrations[self.selected_revision]
 
-        if "delfos" in version.lower():
-            versions_folder = "delfos_versions"
-        else:
-            versions_folder = "tenant_versions"
+        # Obtener la ruta real de la carpeta de versiones
+        version_path = self.version_to_path.get(version)
+        if not version_path:
+            return
 
-        filepath = self.alembic_path / versions_folder / migration.filename
+        filepath = version_path / migration.filename
 
         if not filepath.exists():
             messagebox.showerror("Error", f"Archivo no encontrado:\n{filepath}")
