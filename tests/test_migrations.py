@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from alembic_viewer import Migration, build_graph_structure, parse_migration_file
+from alembic_viewer.models import Migration
+from alembic_viewer.parser import build_graph_structure, parse_migration_file
 
 
 class TestParseMigrationFile:

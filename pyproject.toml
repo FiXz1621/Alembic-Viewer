@@ -39,14 +39,14 @@ dev = [
 ]
 
 [project.scripts]
-alembic-viewer = "alembic_viewer:main"
+alembic-viewer = "alembic_viewer.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+packages = ["alembic_viewer"]
 
 # ============================================================================
 # UV Configuration
