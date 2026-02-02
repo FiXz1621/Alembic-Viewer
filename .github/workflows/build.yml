@@ -28,6 +28,9 @@ jobs:
       
       - name: Create DMG
         run: |
+          # Wait for resources to be released
+          sleep 5
+          sync
           hdiutil create -volname "AlembicViewer" -srcfolder dist/AlembicViewer.app -ov -format UDZO dist/AlembicViewer-macOS.dmg
       
       - name: Upload macOS artifact
