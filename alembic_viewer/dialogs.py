@@ -1,9 +1,9 @@
 """Diálogos de configuración para el visor de Alembic."""
 
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
-from typing import Callable
 
 from alembic_viewer.config import COLOR_LABELS, DEFAULT_COLORS, get_colors, save_config
 
@@ -79,7 +79,7 @@ def show_config_dialog(parent: tk.Tk, alembic_path: Path, config: dict, on_save:
         if folder:
             path_var.set(folder)
 
-    ttk.Button(frame, text="📁 Explorar...", command=browse_folder).grid(row=1, column=1, padx=(5, 0))
+    ttk.Button(frame, text="Explorar...", command=browse_folder).grid(row=1, column=1, padx=(5, 0))
 
     info_label = ttk.Label(
         frame,

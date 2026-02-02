@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from alembic_viewer.canvas import GraphCanvas
-from alembic_viewer.config import DEFAULT_COLORS, get_colors, load_config, save_config
+from alembic_viewer.config import get_colors, load_config
 from alembic_viewer.dialogs import HAS_TKCALENDAR, show_calendar_popup, show_color_config_dialog, show_config_dialog
 from alembic_viewer.models import Migration
 from alembic_viewer.parser import build_graph_structure, find_heads, find_roots, load_migrations
@@ -68,14 +68,14 @@ class AlembicViewerApp:
         ttk.Button(control_frame, text="Refrescar", command=self._load_all_migrations).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="Reset Vista", command=self._reset_view).pack(side=tk.LEFT, padx=5)
 
-        config_menubutton = ttk.Menubutton(control_frame, text="⚙️ Configuración")
+        config_menubutton = ttk.Menubutton(control_frame, text="Configuracion")
         config_menubutton.pack(side=tk.LEFT, padx=5)
 
         config_menu = tk.Menu(config_menubutton, tearoff=0)
         config_menubutton["menu"] = config_menu
 
-        config_menu.add_command(label="📁 Ruta de Alembic...", command=self._show_config_dialog)
-        config_menu.add_command(label="🎨 Colores del grafo...", command=self._show_color_config_dialog)
+        config_menu.add_command(label="Ruta de Alembic...", command=self._show_config_dialog)
+        config_menu.add_command(label="Colores del grafo...", command=self._show_color_config_dialog)
 
         ttk.Separator(control_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=10, fill=tk.Y)
 
@@ -85,10 +85,10 @@ class AlembicViewerApp:
         self.search_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.search_entry.bind("<Return>", self._on_search)
         self.search_entry.bind("<KeyRelease>", self._on_search_key)
-        ttk.Button(control_frame, text="🔍", width=3, command=self._on_search).pack(side=tk.LEFT)
+        ttk.Button(control_frame, text="Buscar", width=6, command=self._on_search).pack(side=tk.LEFT)
 
         self.search_prev_btn = ttk.Button(
-            control_frame, text="◀", width=2, command=self._search_prev, state=tk.DISABLED
+            control_frame, text="<", width=3, command=self._search_prev, state=tk.DISABLED
         )
         self.search_prev_btn.pack(side=tk.LEFT, padx=(5, 0))
 
@@ -96,7 +96,7 @@ class AlembicViewerApp:
         self.search_counter_label.pack(side=tk.LEFT, padx=2)
 
         self.search_next_btn = ttk.Button(
-            control_frame, text="▶", width=2, command=self._search_next, state=tk.DISABLED
+            control_frame, text=">", width=3, command=self._search_next, state=tk.DISABLED
         )
         self.search_next_btn.pack(side=tk.LEFT)
 
@@ -117,7 +117,7 @@ class AlembicViewerApp:
 
         if HAS_TKCALENDAR:
             ttk.Button(
-                filter_frame, text="📅", width=3, command=lambda: show_calendar_popup(self.root, self.date_from_var)
+                filter_frame, text="...", width=3, command=lambda: show_calendar_popup(self.root, self.date_from_var)
             ).pack(side=tk.LEFT, padx=(2, 0))
 
         ttk.Label(filter_frame, text="Hasta:").pack(side=tk.LEFT, padx=(10, 2))
@@ -128,7 +128,7 @@ class AlembicViewerApp:
 
         if HAS_TKCALENDAR:
             ttk.Button(
-                filter_frame, text="📅", width=3, command=lambda: show_calendar_popup(self.root, self.date_to_var)
+                filter_frame, text="...", width=3, command=lambda: show_calendar_popup(self.root, self.date_to_var)
             ).pack(side=tk.LEFT, padx=(2, 0))
 
         ttk.Button(filter_frame, text="Aplicar Filtro", command=self._apply_date_filter).pack(side=tk.LEFT, padx=(10, 5))
@@ -182,7 +182,7 @@ class AlembicViewerApp:
         ttk.Label(detail_header, text="Detalles", font=("TkDefaultFont", 12, "bold")).pack(side=tk.LEFT, anchor=tk.W)
 
         self.open_file_btn = ttk.Button(
-            detail_header, text="📂 Abrir archivo", command=self._open_selected_file, state=tk.DISABLED
+            detail_header, text="Abrir archivo", command=self._open_selected_file, state=tk.DISABLED
         )
         self.open_file_btn.pack(side=tk.RIGHT, padx=5)
 
@@ -191,7 +191,7 @@ class AlembicViewerApp:
 
         # Tab Info
         info_tab = ttk.Frame(self.detail_notebook)
-        self.detail_notebook.add(info_tab, text="📋 Info")
+        self.detail_notebook.add(info_tab, text="Info")
 
         self.detail_text = tk.Text(info_tab, wrap=tk.WORD, width=40, height=20, state=tk.DISABLED)
         detail_scroll = ttk.Scrollbar(info_tab, orient="vertical", command=self.detail_text.yview)
@@ -202,7 +202,7 @@ class AlembicViewerApp:
 
         # Tab Código
         code_tab = ttk.Frame(self.detail_notebook)
-        self.detail_notebook.add(code_tab, text="📝 Código")
+        self.detail_notebook.add(code_tab, text="Codigo")
 
         self.code_text = tk.Text(
             code_tab,
@@ -251,7 +251,7 @@ class AlembicViewerApp:
 
         ttk.Label(
             legend_frame,
-            text="   |   🖱️ Click: seleccionar  •  Arrastrar: mover  •  Scroll/Scrollbars: navegar",
+            text="   |   Click: seleccionar  -  Arrastrar: mover  -  Scroll: navegar",
             foreground="gray",
         ).grid(row=0, column=len(legends), padx=20, sticky=tk.E)
 
@@ -372,55 +372,55 @@ class AlembicViewerApp:
         roots = find_roots(migrations, parents)
 
         if rev in heads:
-            node_type = "🟢 HEAD"
+            node_type = "[HEAD]"
         elif rev in roots:
-            node_type = "🟣 ROOT"
+            node_type = "[ROOT]"
         elif migration.is_merge:
-            node_type = "🟠 MERGE"
+            node_type = "[MERGE]"
         else:
-            node_type = "🔵 Normal"
+            node_type = "[Normal]"
 
         self.detail_text.config(state=tk.NORMAL)
         self.detail_text.delete("1.0", tk.END)
 
-        details = f"""📋 DETALLES DE LA MIGRACIÓN
+        details = f"""DETALLES DE LA MIGRACION
 {"=" * 40}
 
 {node_type}
 
-🔑 Revision ID:
+Revision ID:
    {migration.revision}
 
-📝 Mensaje:
+Mensaje:
    {migration.message}
 
-📁 Archivo:
+Archivo:
    {migration.filename}
 
-📅 Fecha de creación:
+Fecha de creacion:
    {migration.create_date or "N/A"}
 
 """
 
         parent_revs = parents.get(rev, [])
         if parent_revs:
-            details += f"⬇️ Padres ({len(parent_revs)}):\n"
+            details += f"Padres ({len(parent_revs)}):\n"
             for p in parent_revs:
                 p_msg = migrations[p].message[:30] if p in migrations else "?"
-                details += f"   • {p[:12]} - {p_msg}\n"
+                details += f"   - {p[:12]} - {p_msg}\n"
         else:
-            details += "⬇️ Sin padres (ROOT)\n"
+            details += "Sin padres (ROOT)\n"
 
         details += "\n"
 
         child_revs = children.get(rev, [])
         if child_revs:
-            details += f"⬆️ Hijos ({len(child_revs)}):\n"
+            details += f"Hijos ({len(child_revs)}):\n"
             for child in child_revs:
                 child_msg = migrations[child].message[:30] if child in migrations else "?"
-                details += f"   • {child[:12]} - {child_msg}\n"
+                details += f"   - {child[:12]} - {child_msg}\n"
         else:
-            details += "⬆️ Sin hijos (HEAD)\n"
+            details += "Sin hijos (HEAD)\n"
 
         self.detail_text.insert("1.0", details)
         self.detail_text.config(state=tk.DISABLED)
