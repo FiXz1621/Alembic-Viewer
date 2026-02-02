@@ -16,7 +16,7 @@ import re
 import subprocess
 import platform
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, colorchooser
 from dataclasses import dataclass
 from pathlib import Path
 from collections import defaultdict
@@ -181,23 +181,66 @@ def find_roots(migrations: dict[str, Migration], parents: dict[str, list[str]]) 
     return [rev for rev in migrations if not parents.get(rev)]
 
 
+# Colores por defecto
+DEFAULT_COLORS = {
+    "node_normal": "#4a90d9",      # Azul - nodos normales
+    "node_head": "#9b59b6",        # Púrpura - HEAD (sin hijos)
+    "node_root": "#f1c40f",        # Amarillo - ROOT (sin padres)
+    "node_merge": "#e67e22",       # Naranja - merge (múltiples padres)
+    "node_selected": "#2ecc71",    # Verde - nodo seleccionado
+    "edge_normal": "#7f8c8d",      # Gris - aristas normales
+    "edge_merge": "#e67e22",       # Naranja - aristas hacia merge
+    "edge_parent": "#27ae60",      # Verde oscuro - aristas hacia padres
+    "edge_child": "#58d68d",       # Verde claro - aristas hacia hijos
+    "node_parent_border": "#27ae60",  # Verde oscuro - borde de nodos padre
+    "node_child_border": "#58d68d",   # Verde claro - borde de nodos hijo
+    "text": "#2c3e50",
+    "background": "#ecf0f1"
+}
+
+# Nombres descriptivos para la UI
+COLOR_LABELS = {
+    "node_normal": "Nodo Normal",
+    "node_head": "Nodo HEAD (sin hijos)",
+    "node_root": "Nodo ROOT (sin padres)",
+    "node_merge": "Nodo MERGE",
+    "node_selected": "Nodo Seleccionado",
+    "edge_normal": "Arista Normal",
+    "edge_merge": "Arista Merge",
+    "edge_parent": "Arista a Padre",
+    "edge_child": "Arista a Hijo",
+    "node_parent_border": "Borde Nodo Padre",
+    "node_child_border": "Borde Nodo Hijo",
+    "text": "Texto",
+    "background": "Fondo"
+}
+
+
+def get_colors(config: dict) -> dict:
+    """Obtiene los colores de la configuración o usa los valores por defecto."""
+    saved_colors = config.get("colors", {})
+    colors = DEFAULT_COLORS.copy()
+    colors.update(saved_colors)
+    return colors
+
+
 class GraphCanvas(tk.Canvas):
     """Canvas personalizado para dibujar el grafo de migraciones."""
     
-    # Colores
-    COLOR_NODE_NORMAL = "#4a90d9"      # Azul - nodos normales
-    COLOR_NODE_HEAD = "#9b59b6"        # Púrpura - HEAD (sin hijos)
-    COLOR_NODE_ROOT = "#f1c40f"        # Amarillo - ROOT (sin padres)
-    COLOR_NODE_MERGE = "#e67e22"       # Naranja - merge (múltiples padres)
-    COLOR_NODE_SELECTED = "#2ecc71"    # Verde - nodo seleccionado
-    COLOR_EDGE = "#7f8c8d"             # Gris - aristas normales
-    COLOR_EDGE_MERGE = "#e67e22"       # Naranja - aristas hacia merge
-    COLOR_EDGE_PARENT = "#27ae60"      # Verde oscuro - aristas hacia padres
-    COLOR_EDGE_CHILD = "#58d68d"       # Verde claro - aristas hacia hijos
-    COLOR_NODE_PARENT = "#27ae60"      # Verde oscuro - borde de nodos padre
-    COLOR_NODE_CHILD = "#58d68d"       # Verde claro - borde de nodos hijo
-    COLOR_TEXT = "#2c3e50"
-    COLOR_BG = "#ecf0f1"
+    # Colores por defecto (serán sobrescritos por configuración)
+    COLOR_NODE_NORMAL = DEFAULT_COLORS["node_normal"]
+    COLOR_NODE_HEAD = DEFAULT_COLORS["node_head"]
+    COLOR_NODE_ROOT = DEFAULT_COLORS["node_root"]
+    COLOR_NODE_MERGE = DEFAULT_COLORS["node_merge"]
+    COLOR_NODE_SELECTED = DEFAULT_COLORS["node_selected"]
+    COLOR_EDGE = DEFAULT_COLORS["edge_normal"]
+    COLOR_EDGE_MERGE = DEFAULT_COLORS["edge_merge"]
+    COLOR_EDGE_PARENT = DEFAULT_COLORS["edge_parent"]
+    COLOR_EDGE_CHILD = DEFAULT_COLORS["edge_child"]
+    COLOR_NODE_PARENT = DEFAULT_COLORS["node_parent_border"]
+    COLOR_NODE_CHILD = DEFAULT_COLORS["node_child_border"]
+    COLOR_TEXT = DEFAULT_COLORS["text"]
+    COLOR_BG = DEFAULT_COLORS["background"]
     
     # Dimensiones
     NODE_RADIUS = 32
@@ -237,6 +280,24 @@ class GraphCanvas(tk.Canvas):
         
         # Zoom con pinch en trackpad (macOS)
         self.bind("<Control-MouseWheel>", self._on_scroll)
+    
+    def set_colors(self, colors: dict):
+        """Actualiza los colores del canvas."""
+        self.COLOR_NODE_NORMAL = colors.get("node_normal", DEFAULT_COLORS["node_normal"])
+        self.COLOR_NODE_HEAD = colors.get("node_head", DEFAULT_COLORS["node_head"])
+        self.COLOR_NODE_ROOT = colors.get("node_root", DEFAULT_COLORS["node_root"])
+        self.COLOR_NODE_MERGE = colors.get("node_merge", DEFAULT_COLORS["node_merge"])
+        self.COLOR_NODE_SELECTED = colors.get("node_selected", DEFAULT_COLORS["node_selected"])
+        self.COLOR_EDGE = colors.get("edge_normal", DEFAULT_COLORS["edge_normal"])
+        self.COLOR_EDGE_MERGE = colors.get("edge_merge", DEFAULT_COLORS["edge_merge"])
+        self.COLOR_EDGE_PARENT = colors.get("edge_parent", DEFAULT_COLORS["edge_parent"])
+        self.COLOR_EDGE_CHILD = colors.get("edge_child", DEFAULT_COLORS["edge_child"])
+        self.COLOR_NODE_PARENT = colors.get("node_parent_border", DEFAULT_COLORS["node_parent_border"])
+        self.COLOR_NODE_CHILD = colors.get("node_child_border", DEFAULT_COLORS["node_child_border"])
+        self.COLOR_TEXT = colors.get("text", DEFAULT_COLORS["text"])
+        self.COLOR_BG = colors.get("background", DEFAULT_COLORS["background"])
+        self.configure(bg=self.COLOR_BG)
+        self._draw_graph()
     
     def set_data(self, migrations: dict[str, Migration], 
                  children: dict[str, list[str]], 
@@ -762,6 +823,7 @@ class AlembicViewerApp:
         ttk.Button(control_frame, text="Refrescar", command=self._load_all_migrations).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="Reset Vista", command=self._reset_view).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="⚙️ Configurar", command=self._show_config_dialog).pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="🎨 Colores", command=self._show_color_config_dialog).pack(side=tk.LEFT, padx=5)
         
         # Separador
         ttk.Separator(control_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, padx=10, fill=tk.Y)
@@ -846,6 +908,7 @@ class AlembicViewerApp:
         canvas_container.pack(fill=tk.BOTH, expand=True, pady=5)
         
         self.graph_canvas = GraphCanvas(canvas_container, highlightthickness=0)
+        self.graph_canvas.set_colors(get_colors(self.config))  # Aplicar colores de config
         self.graph_canvas.on_node_select = self._on_node_select
         self.graph_canvas.on_node_double_click = self._on_node_double_click
         self.graph_canvas.on_node_deselect = self._on_node_deselect
@@ -1362,6 +1425,130 @@ class AlembicViewerApp:
         ttk.Button(btn_frame, text="Guardar y Recargar", command=save_and_reload).pack(side=tk.LEFT, padx=5)
         
         frame.columnconfigure(0, weight=1)
+    
+    def _show_color_config_dialog(self):
+        """Muestra el diálogo de configuración de colores."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Configuración de Colores")
+        dialog.geometry("500x550")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Centrar en la ventana principal
+        dialog.geometry(f"+{self.root.winfo_x() + 150}+{self.root.winfo_y() + 50}")
+        
+        # Frame con scroll
+        main_frame = ttk.Frame(dialog, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(main_frame, text="Personalizar colores del grafo", 
+                  font=("TkDefaultFont", 12, "bold")).pack(anchor=tk.W, pady=(0, 10))
+        
+        # Canvas con scroll para los colores
+        canvas = tk.Canvas(main_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Obtener colores actuales
+        current_colors = get_colors(self.config)
+        color_vars: dict[str, tk.StringVar] = {}
+        color_previews: dict[str, tk.Canvas] = {}
+        
+        def pick_color(key: str):
+            """Abre el selector de color para una clave específica."""
+            current = color_vars[key].get()
+            result = colorchooser.askcolor(color=current, title=f"Elegir color: {COLOR_LABELS[key]}")
+            if result[1]:  # result es ((r,g,b), '#hex')
+                color_vars[key].set(result[1])
+                color_previews[key].configure(bg=result[1])
+        
+        # Crear filas para cada color
+        for i, (key, label) in enumerate(COLOR_LABELS.items()):
+            row_frame = ttk.Frame(scrollable_frame)
+            row_frame.pack(fill=tk.X, pady=3)
+            
+            # Label del color
+            ttk.Label(row_frame, text=label, width=25, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 10))
+            
+            # Variable para almacenar el color
+            color_vars[key] = tk.StringVar(value=current_colors.get(key, DEFAULT_COLORS[key]))
+            
+            # Preview del color
+            preview = tk.Canvas(row_frame, width=30, height=20, highlightthickness=1, 
+                               highlightbackground="#999", bg=color_vars[key].get())
+            preview.pack(side=tk.LEFT, padx=(0, 5))
+            color_previews[key] = preview
+            
+            # Entrada de texto para el código hex
+            entry = ttk.Entry(row_frame, textvariable=color_vars[key], width=10)
+            entry.pack(side=tk.LEFT, padx=(0, 5))
+            
+            # Actualizar preview cuando cambia el texto
+            def update_preview(var_key=key):
+                try:
+                    color_previews[var_key].configure(bg=color_vars[var_key].get())
+                except tk.TclError:
+                    pass  # Color inválido
+            
+            color_vars[key].trace_add("write", lambda *args, k=key: update_preview(k))
+            
+            # Botón para abrir el selector
+            ttk.Button(row_frame, text="...", width=3, 
+                      command=lambda k=key: pick_color(k)).pack(side=tk.LEFT)
+        
+        # Frame de botones
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X, pady=(15, 0))
+        
+        def reset_colors():
+            """Restaura los colores por defecto."""
+            for key, default_val in DEFAULT_COLORS.items():
+                color_vars[key].set(default_val)
+                color_previews[key].configure(bg=default_val)
+        
+        def apply_colors():
+            """Aplica los colores sin cerrar el diálogo."""
+            colors = {key: var.get() for key, var in color_vars.items()}
+            self.graph_canvas.set_colors(colors)
+            self._update_legend_colors(colors)
+        
+        def save_and_close():
+            """Guarda los colores y cierra el diálogo."""
+            colors = {key: var.get() for key, var in color_vars.items()}
+            self.config["colors"] = colors
+            save_config(self.config)
+            self.graph_canvas.set_colors(colors)
+            self._update_legend_colors(colors)
+            dialog.destroy()
+            messagebox.showinfo("Éxito", "Colores guardados correctamente.")
+        
+        ttk.Button(btn_frame, text="Restablecer", command=reset_colors).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Aplicar", command=apply_colors).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Guardar", command=save_and_close).pack(side=tk.LEFT, padx=5)
+        
+        # Bind Escape para cerrar
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+    
+    def _update_legend_colors(self, colors: dict):
+        """Actualiza los colores de la leyenda."""
+        # La leyenda se recrea cada vez, así que actualizamos las constantes de clase
+        GraphCanvas.COLOR_NODE_NORMAL = colors.get("node_normal", DEFAULT_COLORS["node_normal"])
+        GraphCanvas.COLOR_NODE_HEAD = colors.get("node_head", DEFAULT_COLORS["node_head"])
+        GraphCanvas.COLOR_NODE_ROOT = colors.get("node_root", DEFAULT_COLORS["node_root"])
+        GraphCanvas.COLOR_NODE_MERGE = colors.get("node_merge", DEFAULT_COLORS["node_merge"])
     
     def _on_deselect(self, event=None):
         """Deselecciona el nodo actual (llamado por Escape)."""
