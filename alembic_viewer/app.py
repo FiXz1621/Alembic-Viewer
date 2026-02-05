@@ -24,20 +24,20 @@ class AlembicViewerApp:
 
         self.config = load_config()
 
-        # Lista de rutas configuradas (para compatibilidad, aún soportamos un solo path pasado como argumento)
+        # Lista de rutas configuradas con alias
+        # Cada item es {"path": str, "alias": str}
         if alembic_path:
-            self.alembic_paths = [alembic_path]
+            self.alembic_paths = [{"path": str(alembic_path), "alias": ""}]
         else:
-            configured_paths = get_alembic_paths(self.config)
-            if configured_paths:
-                self.alembic_paths = [Path(p) for p in configured_paths]
-            else:
-                self.alembic_paths = [Path(__file__).parent.parent / "alembic"]
+            self.alembic_paths = get_alembic_paths(self.config)
+            if not self.alembic_paths:
+                default = str(Path(__file__).parent.parent / "alembic")
+                self.alembic_paths = [{"path": default, "alias": ""}]
 
         self.migrations: dict[str, dict[str, Migration]] = {}
         self.children: dict[str, dict[str, list[str]]] = {}
         self.parents: dict[str, dict[str, list[str]]] = {}
-        self.version_to_path: dict[str, Path] = {}  # Mapeo de versión a su ruta base
+        self.version_to_path: dict[str, Path] = {}  # Mapeo de nombre a su ruta
 
         self.selected_revision: str | None = None
         self.search_results: list[str] = []
@@ -267,17 +267,22 @@ class AlembicViewerApp:
 
     def _load_all_migrations(self):
         """Carga todas las migraciones de todas las carpetas configuradas."""
+        # Guardar selección actual para restaurarla después
+        current_selection = self.version_var.get()
+
         self.migrations.clear()
         self.children.clear()
         self.parents.clear()
         self.version_to_path.clear()
 
-        for version_path in self.alembic_paths:
+        for item in self.alembic_paths:
+            version_path = Path(item["path"])
             if not version_path.exists():
                 continue
 
-            # Cada ruta configurada ES una carpeta de versiones directamente
-            name = version_path.name
+            # Usar alias si existe, sino el nombre de la carpeta
+            alias = item.get("alias", "").strip()
+            name = alias if alias else version_path.name
 
             # Si hay conflicto de nombre, añadir el directorio padre
             if name in self.migrations:
@@ -290,14 +295,19 @@ class AlembicViewerApp:
             self.version_to_path[name] = version_path
 
         if not self.migrations:
-            paths_str = "\n".join(str(p) for p in self.alembic_paths)
+            paths_str = "\n".join(item["path"] for item in self.alembic_paths)
             messagebox.showwarning("Aviso", f"No se encontraron migraciones en:\n{paths_str}")
             return
 
         self.version_combo["values"] = list(self.migrations.keys())
-        if self.migrations:
+
+        # Restaurar selección si sigue existiendo
+        if current_selection and current_selection in self.migrations:
+            self.version_var.set(current_selection)
+        elif self.migrations:
             self.version_combo.current(0)
-            self._on_version_change(None)
+
+        self._on_version_change(None)
 
     def _on_version_change(self, event):
         """Maneja el cambio de versión seleccionada."""
@@ -530,8 +540,8 @@ Fecha de creacion:
     def _show_config_dialog(self):
         """Muestra el diálogo de configuración de rutas."""
 
-        def on_save(paths: list[str]):
-            self.alembic_paths = [Path(p) for p in paths]
+        def on_save(paths: list[dict]):
+            self.alembic_paths = paths
             self._load_all_migrations()
 
         show_config_dialog(self.root, self.config, on_save)

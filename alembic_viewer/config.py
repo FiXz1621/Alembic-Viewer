@@ -67,25 +67,35 @@ def get_colors(config: dict) -> dict:
     return colors
 
 
-def get_alembic_paths(config: dict) -> list[str]:
+def get_alembic_paths(config: dict) -> list[dict]:
     """Obtiene la lista de rutas de alembic configuradas.
     
-    Soporta tanto el formato antiguo (alembic_path: str) como el nuevo (alembic_paths: list).
+    Retorna una lista de diccionarios con 'path' y 'alias'.
+    Soporta formatos antiguos para compatibilidad hacia atrás.
     """
-    # Formato nuevo: lista de paths
+    # Formato nuevo: lista de dicts con path y alias
     if "alembic_paths" in config:
-        return config["alembic_paths"]
+        paths = config["alembic_paths"]
+        # Normalizar: si es lista de strings, convertir a dicts
+        result = []
+        for item in paths:
+            if isinstance(item, str):
+                result.append({"path": item, "alias": ""})
+            elif isinstance(item, dict):
+                result.append({"path": item.get("path", ""), "alias": item.get("alias", "")})
+        return result
     
     # Formato antiguo: un solo path (migrar automáticamente)
     if "alembic_path" in config:
-        return [config["alembic_path"]]
+        return [{"path": config["alembic_path"], "alias": ""}]
     
     return []
 
 
-def set_alembic_paths(config: dict, paths: list[str]):
-    """Establece la lista de rutas de alembic.
+def set_alembic_paths(config: dict, paths: list[dict]):
+    """Establece la lista de rutas de alembic con sus alias.
     
+    Cada elemento debe ser un dict con 'path' y opcionalmente 'alias'.
     También elimina el formato antiguo si existe.
     """
     config["alembic_paths"] = paths

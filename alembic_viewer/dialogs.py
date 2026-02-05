@@ -60,14 +60,14 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
     """Muestra el diálogo de configuración de carpetas de Alembic."""
     dialog = tk.Toplevel(parent)
     dialog.title("Configuracion de Carpetas")
-    dialog.geometry("650x400")
+    dialog.geometry("700x450")
     dialog.resizable(True, True)
     dialog.transient(parent)
     dialog.grab_set()
 
     # Centrar en la ventana principal
-    x = parent.winfo_x() + (parent.winfo_width() - 650) // 2
-    y = parent.winfo_y() + (parent.winfo_height() - 400) // 2
+    x = parent.winfo_x() + (parent.winfo_width() - 700) // 2
+    y = parent.winfo_y() + (parent.winfo_height() - 450) // 2
     dialog.geometry(f"+{x}+{y}")
 
     frame = ttk.Frame(dialog, padding=15)
@@ -80,48 +80,61 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
 
     ttk.Label(
         frame,
-        text="Agrega las carpetas que contienen los archivos de migraciones (.py).",
+        text="Agrega las carpetas que contienen los archivos de migraciones (.py). Puedes asignar un alias para identificarlas.",
         foreground="gray",
     ).pack(anchor=tk.W, pady=(0, 10))
 
-    # Frame para la lista
+    # Frame para la lista con Treeview
     list_frame = ttk.Frame(frame)
     list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-    # Listbox con scrollbar
-    listbox_frame = ttk.Frame(list_frame)
-    listbox_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-    scrollbar = ttk.Scrollbar(listbox_frame)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    paths_listbox = tk.Listbox(
-        listbox_frame,
-        height=10,
-        selectmode=tk.SINGLE,
-        yscrollcommand=scrollbar.set,
-        font=("TkDefaultFont", 10),
-    )
-    paths_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    scrollbar.config(command=paths_listbox.yview)
-
-    # Cargar paths existentes
-    current_paths = get_alembic_paths(config).copy()
-    for path in current_paths:
-        paths_listbox.insert(tk.END, path)
-
-    # Botones de acción para la lista
+    # Botones de acción para la lista (primero para que siempre estén visibles)
     action_frame = ttk.Frame(list_frame)
     action_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
+    # Treeview con columnas (en un frame que ocupa el resto del espacio)
+    tree_frame = ttk.Frame(list_frame)
+    tree_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    columns = ("alias", "path")
+    tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=8)
+    tree.heading("alias", text="Alias")
+    tree.heading("path", text="Ruta")
+    tree.column("alias", width=120, minwidth=80, stretch=False)
+    tree.column("path", width=800, minwidth=400, stretch=False)
+
+    # Scrollbars vertical y horizontal
+    scrollbar_y = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
+    scrollbar_x = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=tree.xview)
+    tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
+    # Layout con grid para soportar ambos scrollbars
+    tree.grid(row=0, column=0, sticky="nsew")
+    scrollbar_y.grid(row=0, column=1, sticky="ns")
+    scrollbar_x.grid(row=1, column=0, sticky="ew")
+    tree_frame.grid_rowconfigure(0, weight=1)
+    tree_frame.grid_columnconfigure(0, weight=1)
+
+    # Lista interna de paths: [{path: str, alias: str}, ...]
+    current_paths: list[dict] = [item.copy() for item in get_alembic_paths(config)]
+
+    def refresh_tree():
+        tree.delete(*tree.get_children())
+        for item in current_paths:
+            alias = item.get("alias", "") or "(sin alias)"
+            tree.insert("", tk.END, values=(alias, item["path"]))
+
+    refresh_tree()
+
     def add_folder():
         folder = filedialog.askdirectory(
-            title="Seleccionar carpeta de Alembic",
+            title="Seleccionar carpeta de versiones",
             initialdir=Path.home(),
         )
         if folder:
             # Verificar que no esté duplicada
-            if folder in current_paths:
+            existing_paths = [item["path"] for item in current_paths]
+            if folder in existing_paths:
                 messagebox.showwarning("Aviso", "Esta carpeta ya esta en la lista.")
                 return
 
@@ -140,51 +153,78 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
                     ):
                         return
 
-            current_paths.append(folder)
-            paths_listbox.insert(tk.END, folder)
+            # Preguntar por alias
+            alias = _ask_alias(dialog, folder_path.name)
+            current_paths.append({"path": folder, "alias": alias or ""})
+            refresh_tree()
+            update_info()
+
+    def edit_selected():
+        selection = tree.selection()
+        if not selection:
+            messagebox.showinfo("Info", "Selecciona una carpeta para editar.")
+            return
+
+        idx = tree.index(selection[0])
+        item = current_paths[idx]
+
+        new_alias = _ask_alias(dialog, Path(item["path"]).name, item.get("alias", ""))
+        if new_alias is not None:
+            current_paths[idx]["alias"] = new_alias
+            refresh_tree()
 
     def remove_selected():
-        selection = paths_listbox.curselection()
+        selection = tree.selection()
         if not selection:
             messagebox.showinfo("Info", "Selecciona una carpeta para eliminar.")
             return
 
-        idx = selection[0]
-        path = paths_listbox.get(idx)
+        idx = tree.index(selection[0])
+        item = current_paths[idx]
 
-        if messagebox.askyesno("Confirmar", f"Eliminar esta carpeta de la lista?\n\n{path}"):
-            paths_listbox.delete(idx)
-            current_paths.remove(path)
+        display = item.get("alias") or item["path"]
+        if messagebox.askyesno("Confirmar", f"Eliminar esta carpeta de la lista?\n\n{display}"):
+            current_paths.pop(idx)
+            refresh_tree()
+            update_info()
 
     def move_up():
-        selection = paths_listbox.curselection()
-        if not selection or selection[0] == 0:
+        selection = tree.selection()
+        if not selection:
             return
-        idx = selection[0]
-        path = current_paths.pop(idx)
-        current_paths.insert(idx - 1, path)
-        paths_listbox.delete(0, tk.END)
-        for p in current_paths:
-            paths_listbox.insert(tk.END, p)
-        paths_listbox.selection_set(idx - 1)
+        idx = tree.index(selection[0])
+        if idx == 0:
+            return
+        current_paths[idx], current_paths[idx - 1] = current_paths[idx - 1], current_paths[idx]
+        refresh_tree()
+        # Reseleccionar
+        children = tree.get_children()
+        if children:
+            tree.selection_set(children[idx - 1])
 
     def move_down():
-        selection = paths_listbox.curselection()
-        if not selection or selection[0] >= len(current_paths) - 1:
+        selection = tree.selection()
+        if not selection:
             return
-        idx = selection[0]
-        path = current_paths.pop(idx)
-        current_paths.insert(idx + 1, path)
-        paths_listbox.delete(0, tk.END)
-        for p in current_paths:
-            paths_listbox.insert(tk.END, p)
-        paths_listbox.selection_set(idx + 1)
+        idx = tree.index(selection[0])
+        if idx >= len(current_paths) - 1:
+            return
+        current_paths[idx], current_paths[idx + 1] = current_paths[idx + 1], current_paths[idx]
+        refresh_tree()
+        # Reseleccionar
+        children = tree.get_children()
+        if children:
+            tree.selection_set(children[idx + 1])
 
     ttk.Button(action_frame, text="Agregar...", command=add_folder, width=12).pack(pady=2)
+    ttk.Button(action_frame, text="Editar...", command=edit_selected, width=12).pack(pady=2)
     ttk.Button(action_frame, text="Eliminar", command=remove_selected, width=12).pack(pady=2)
     ttk.Separator(action_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
     ttk.Button(action_frame, text="Subir", command=move_up, width=12).pack(pady=2)
     ttk.Button(action_frame, text="Bajar", command=move_down, width=12).pack(pady=2)
+
+    # Doble click para editar
+    tree.bind("<Double-1>", lambda e: edit_selected())
 
     # Separador
     ttk.Separator(frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
@@ -215,13 +255,56 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
     )
     info_label.pack(side=tk.LEFT)
 
-    def update_info(*args):
+    def update_info():
         info_label.config(text=f"{len(current_paths)} carpeta(s) configurada(s)")
 
-    # Actualizar contador cuando cambie la lista
-    paths_listbox.bind("<<ListboxSelect>>", update_info)
-
     dialog.bind("<Escape>", lambda e: dialog.destroy())
+
+
+def _ask_alias(parent: tk.Toplevel, default_name: str, current_alias: str = "") -> str | None:
+    """Muestra un diálogo para pedir el alias de una carpeta."""
+    result = [current_alias]  # Usamos lista para poder modificar desde el closure
+
+    popup = tk.Toplevel(parent)
+    popup.title("Alias de carpeta")
+    popup.geometry("400x180")
+    popup.transient(parent)
+    popup.grab_set()
+
+    # Centrar
+    popup.geometry(f"+{parent.winfo_x() + 100}+{parent.winfo_y() + 100}")
+
+    frame = ttk.Frame(popup, padding=20)
+    frame.pack(fill=tk.BOTH, expand=True)
+
+    ttk.Label(frame, text=f"Carpeta: {default_name}", font=("TkDefaultFont", 10, "bold")).pack(anchor=tk.W)
+    ttk.Label(frame, text="Alias (dejar vacio para usar el nombre de la carpeta):").pack(anchor=tk.W, pady=(10, 5))
+
+    alias_var = tk.StringVar(value=current_alias)
+    entry = ttk.Entry(frame, textvariable=alias_var, width=40)
+    entry.pack(fill=tk.X)
+    entry.focus_set()
+    entry.select_range(0, tk.END)
+
+    btn_frame = ttk.Frame(frame)
+    btn_frame.pack(pady=(15, 0))
+
+    def on_ok():
+        result[0] = alias_var.get().strip()
+        popup.destroy()
+
+    def on_cancel():
+        result[0] = current_alias  # Mantener el valor original
+        popup.destroy()
+
+    entry.bind("<Return>", lambda e: on_ok())
+    popup.bind("<Escape>", lambda e: on_cancel())
+
+    ttk.Button(btn_frame, text="Aceptar", command=on_ok).pack(side=tk.LEFT, padx=5)
+    ttk.Button(btn_frame, text="Cancelar", command=on_cancel).pack(side=tk.LEFT, padx=5)
+
+    popup.wait_window()
+    return result[0]
 
 
 def show_color_config_dialog(parent: tk.Tk, config: dict, on_apply: Callable, on_save: Callable):
