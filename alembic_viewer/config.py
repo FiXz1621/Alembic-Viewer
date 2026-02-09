@@ -51,6 +51,11 @@ def load_config() -> dict:
     return {}
 
 
+def is_first_run() -> bool:
+    """Detecta si es la primera ejecución (no existe archivo de configuración)."""
+    return not CONFIG_FILE.exists()
+
+
 def save_config(config: dict):
     """Guarda la configuración en el archivo."""
     try:

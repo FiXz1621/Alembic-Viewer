@@ -75,14 +75,19 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
 
     # Título
     ttk.Label(
-        frame, text="Carpetas de Versiones", font=("TkDefaultFont", 12, "bold")
+        frame, text="Configuración de Carpetas de Migraciones", font=("TkDefaultFont", 12, "bold")
     ).pack(anchor=tk.W, pady=(0, 5))
 
-    ttk.Label(
+    # Instrucciones más claras
+    instructions = ttk.Label(
         frame,
-        text="Agrega las carpetas que contienen los archivos de migraciones (.py). Puedes asignar un alias para identificarlas.",
+        text="Agrega las carpetas que contienen los archivos de migraciones de Alembic.\n"
+        "Normalmente es la carpeta 'versions' dentro de tu proyecto.\n"
+        "Ejemplo: /ruta/a/tu/proyecto/alembic/versions",
         foreground="gray",
-    ).pack(anchor=tk.W, pady=(0, 10))
+        justify=tk.LEFT
+    )
+    instructions.pack(anchor=tk.W, pady=(0, 10))
 
     # Frame para la lista con Treeview
     list_frame = ttk.Frame(frame)
@@ -128,7 +133,7 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
 
     def add_folder():
         folder = filedialog.askdirectory(
-            title="Seleccionar carpeta de versiones",
+            title="Seleccionar carpeta 'versions' de Alembic",
             initialdir=Path.home(),
         )
         if folder:
@@ -148,8 +153,9 @@ def show_config_dialog(parent: tk.Tk, config: dict, on_save: Callable):
                 if not has_migrations:
                     if not messagebox.askyesno(
                         "Advertencia",
-                        f"No se encontraron archivos de migracion (.py) en:\n{folder}\n\n"
-                        "Continuar de todos modos?",
+                        f"No se encontraron archivos de migración (.py) en:\n{folder}\n\n"
+                        "¿Estás seguro de que esta es la carpeta 'versions' correcta?\n"
+                        "¿Deseas continuar de todos modos?",
                     ):
                         return
 
@@ -278,7 +284,12 @@ def _ask_alias(parent: tk.Toplevel, default_name: str, current_alias: str = "") 
     frame.pack(fill=tk.BOTH, expand=True)
 
     ttk.Label(frame, text=f"Carpeta: {default_name}", font=("TkDefaultFont", 10, "bold")).pack(anchor=tk.W)
-    ttk.Label(frame, text="Alias (dejar vacio para usar el nombre de la carpeta):").pack(anchor=tk.W, pady=(10, 5))
+    ttk.Label(
+        frame, 
+        text="Alias (opcional, para identificar fácilmente esta carpeta):",
+        wraplength=350,
+        justify=tk.LEFT
+    ).pack(anchor=tk.W, pady=(10, 5))
 
     alias_var = tk.StringVar(value=current_alias)
     entry = ttk.Entry(frame, textvariable=alias_var, width=40)

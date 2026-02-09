@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from alembic_viewer.canvas import GraphCanvas
-from alembic_viewer.config import get_alembic_paths, get_colors, load_config
+from alembic_viewer.config import get_alembic_paths, get_colors, is_first_run, load_config
 from alembic_viewer.dialogs import HAS_TKCALENDAR, show_calendar_popup, show_color_config_dialog, show_config_dialog
 from alembic_viewer.models import Migration
 from alembic_viewer.parser import build_graph_structure, find_heads, find_roots, load_migrations
@@ -23,6 +23,7 @@ class AlembicViewerApp:
         self.root.geometry("1400x900")
 
         self.config = load_config()
+        self.is_first_run = is_first_run()
 
         # Lista de rutas configuradas con alias
         # Cada item es {"path": str, "alias": str}
@@ -45,6 +46,10 @@ class AlembicViewerApp:
 
         self._setup_ui()
         self._load_all_migrations()
+        
+        # Si es la primera ejecución, mostrar diálogo de configuración
+        if self.is_first_run:
+            self.root.after(500, self._show_first_run_dialog)
 
     def _setup_ui(self):
         """Configura la interfaz de usuario."""
@@ -545,6 +550,20 @@ Fecha de creacion:
             self._load_all_migrations()
 
         show_config_dialog(self.root, self.config, on_save)
+
+    def _show_first_run_dialog(self):
+        """Muestra el diálogo de configuración en la primera ejecución."""
+        result = messagebox.showinfo(
+            "Bienvenido a Alembic Viewer",
+            "¡Bienvenido a Alembic Migration Graph Viewer!\n\n"
+            "Para comenzar, necesitas configurar las carpetas donde se encuentran "
+            "tus migraciones de Alembic.\n\n"
+            "Normalmente se encuentra en: proyecto/alembic/versions\n\n"
+            "Haz clic en Aceptar para configurar ahora.",
+            icon="info"
+        )
+        # Mostrar el diálogo de configuración
+        self._show_config_dialog()
 
     def _show_color_config_dialog(self):
         """Muestra el diálogo de configuración de colores."""
